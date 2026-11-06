@@ -120,46 +120,210 @@ def public_base(handler=None):
 
 
 # ---------------------------------------------------------------- site
-REDIRECT_PAGE = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Открыть в FreeTurn</title>
-<style>body{{font-family:system-ui,sans-serif;max-width:560px;margin:40px auto;padding:0 20px;text-align:center}}
-a.btn{{display:inline-block;margin:24px 0;padding:14px 28px;background:#2b7fff;color:#fff;
-border-radius:12px;text-decoration:none;font-size:18px}}
-button{{padding:10px 18px;border-radius:10px;border:1px solid #ccc;background:#fff;cursor:pointer}}
-code{{word-break:break-all;color:#555}}</style></head><body>
-<h1>Открыть в FreeTurn</h1><p>Профиль: <b>{name}</b><br><code>{peer}</code></p>
-<a class="btn" href="{link}">Открыть в FreeTurn</a><br>
-<button onclick="navigator.clipboard.writeText('{link}')">Скопировать ссылку</button>
-<p style="color:#666">Если приложение не открылось само — нажми кнопку выше.
-Если FreeTurn не установлен — сначала установи его.</p>
-<script>window.location.href = "{link}";</script>
-</body></html>"""
+STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+FONT_FILES = {
+    "/static/inter-cyrillic.woff2": "inter-cyrillic.woff2",
+    "/static/inter-latin.woff2": "inter-latin.woff2",
+}
+FONT_CACHE = {}  # filename -> bytes, read from disk once
 
-LANDING = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<title>FreeTurn Redirect</title></head><body style="font-family:system-ui,sans-serif;max-width:560px;margin:40px auto;padding:0 20px">
-<h1>FreeTurn Redirect</h1>
-<p>Короткие страницы-переходники <code>/r/&lt;code&gt;</code> на <code>freeturn://</code>-ссылки.
-Ссылки создаются через Telegram-бота, хранятся только в памяти — после
-перезагрузки сервиса пропадают.</p>
-<p>Статус: <a href="/health">/health</a></p></body></html>"""
+FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' "
+           "viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' "
+           "fill='%232b7fff'/%3E%3Ctext x='32' y='45' font-family='system-ui,"
+           "sans-serif' font-size='36' font-weight='700' fill='%23fff' "
+           "text-anchor='middle'%3EF%3C/text%3E%3C/svg%3E")
 
-NOT_FOUND = """<!doctype html><html lang="ru"><head><meta charset="utf-8">
-<title>Ссылка не найдена</title></head><body style="font-family:system-ui,sans-serif;max-width:560px;margin:40px auto;padding:0 20px">
-<h1>Ссылка не найдена</h1><p>Возможно, сервис перезагружался — ссылки живут только в памяти.
-Создай её заново через Telegram-бота.</p></body></html>"""
+BASE_CSS = """
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;
+src:url(/static/inter-cyrillic.woff2) format("woff2");
+unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:Inter;font-style:normal;font-weight:100 900;font-display:swap;
+src:url(/static/inter-latin.woff2) format("woff2");
+unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,
+U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,
+U+FEFF,U+FFFD}
+:root{color-scheme:light dark;--bg:#f7f8fa;--fg:#101828;--muted:#667085;
+--card:#fff;--border:#e4e7ec;--accent:#2b7fff;--accent-hover:#1f6fe5;
+--accent-fg:#fff;--code-bg:#f2f4f7;
+--shadow:0 1px 2px rgba(16,24,40,.06),0 8px 24px rgba(16,24,40,.06)}
+@media (prefers-color-scheme:dark){:root{--bg:#0b0e13;--fg:#e6e8eb;
+--muted:#98a2b3;--card:#141922;--border:#242c38;--accent:#4c8dff;
+--accent-hover:#6ba0ff;--accent-fg:#fff;--code-bg:#1b2230;
+--shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px rgba(0,0,0,.35)}}
+*{box-sizing:border-box}
+html{height:100%}
+body{min-height:100%;margin:0;background:var(--bg);color:var(--fg);
+font-family:Inter,system-ui,
+-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.5;
+-webkit-font-smoothing:antialiased;display:flex;align-items:center;
+justify-content:center;padding:24px}
+.wrap{width:100%;max-width:520px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:20px;
+padding:32px;box-shadow:var(--shadow);text-align:center}
+.logo{width:56px;height:56px;border-radius:16px;background:var(--accent);
+color:var(--accent-fg);display:inline-flex;align-items:center;
+justify-content:center;font-weight:700;font-size:24px;margin-bottom:20px}
+h1{font-size:24px;line-height:1.25;margin:0 0 8px;font-weight:650;
+letter-spacing:-.02em}
+p{margin:0 0 16px;color:var(--muted)}
+.profile{font-size:18px;font-weight:600;color:var(--fg);margin:0 0 6px}
+.peer{display:inline-block;font-family:ui-monospace,SFMono-Regular,Menlo,
+Consolas,monospace;font-size:13px;color:var(--muted);background:var(--code-bg);
+border-radius:8px;padding:4px 10px;word-break:break-all;margin-bottom:24px}
+.btn{display:flex;align-items:center;justify-content:center;width:100%;
+padding:15px 24px;background:var(--accent);color:var(--accent-fg);border:0;
+border-radius:12px;font:inherit;font-size:17px;font-weight:600;
+text-decoration:none;cursor:pointer;transition:background .15s}
+.btn:hover{background:var(--accent-hover)}
+.btn.secondary{background:transparent;color:var(--fg);border:1px solid var(--border);
+margin-top:10px;font-size:15px;padding:12px 24px}
+.btn.secondary:hover{background:var(--code-bg)}
+.hint{font-size:13px;color:var(--muted);margin:20px 0 0}
+.pill{display:inline-flex;align-items:center;gap:8px;font-size:14px;
+font-weight:500;color:var(--fg);background:var(--code-bg);
+border:1px solid var(--border);border-radius:999px;padding:6px 14px;
+margin-bottom:20px}
+.dot{width:8px;height:8px;border-radius:50%;background:#12b76a;
+box-shadow:0 0 0 3px rgba(18,183,106,.18)}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+font-size:.9em;background:var(--code-bg);border-radius:6px;padding:2px 6px;
+white-space:nowrap}
+ul.cmds{list-style:none;padding:0;margin:0;text-align:left;font-size:14px;
+color:var(--muted)}
+ul.cmds li{padding:8px 0;border-top:1px solid var(--border)}
+ul.cmds li:first-child{border-top:0}
+ul.cmds b{color:var(--fg);font-weight:600}
+.footer{margin-top:20px;font-size:13px;color:var(--muted);text-align:center}
+.footer a{color:var(--muted)}
+a{color:var(--accent)}
+"""
+
+
+def page(title, body, *, description="", og_title="FreeTurn Redirect",
+         og_description="Страница-переходник на freeturn:// ссылки."):
+    """Build a full HTML page with the shared head, CSS and neutral OG tags."""
+    return f"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#f7f8fa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0b0e13" media="(prefers-color-scheme: dark)">
+<meta name="description" content="{html.escape(description, quote=True)}">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FreeTurn Redirect">
+<meta property="og:title" content="{html.escape(og_title, quote=True)}">
+<meta property="og:description" content="{html.escape(og_description, quote=True)}">
+<link rel="icon" href="{FAVICON}">
+<title>{html.escape(title)}</title>
+<style>{BASE_CSS}</style></head>
+<body><div class="wrap">{body}</div></body></html>"""
+
+
+REDIRECT_BODY = string.Template("""
+<div class="card">
+  <div class="logo">F</div>
+  <h1>Открыть в FreeTurn</h1>
+  <p class="profile">$name</p>
+  <div class="peer">$peer</div>
+  <a class="btn" href="$link" id="open">Открыть в FreeTurn</a>
+  <button class="btn secondary" id="copy" type="button">Скопировать ссылку</button>
+  <p class="hint">Если приложение не открылось само — нажми кнопку выше.<br>
+  Если FreeTurn не установлен — сначала установи его.</p>
+</div>
+<script>
+(function () {
+  var link = $link_js;
+  var copy = document.getElementById('copy');
+  function done() {
+    copy.textContent = 'Скопировано';
+    setTimeout(function () { copy.textContent = 'Скопировать ссылку'; }, 1600);
+  }
+  function fallback() {
+    var t = document.createElement('textarea');
+    t.value = link;
+    document.body.appendChild(t);
+    t.select();
+    try { document.execCommand('copy'); done(); } catch (e) {}
+    document.body.removeChild(t);
+  }
+  copy.addEventListener('click', function () {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(link).then(done, fallback);
+    } else {
+      fallback();
+    }
+  });
+  window.location.href = link;
+})();
+</script>
+""")
+
+LANDING_BODY = """
+<div class="card">
+  <div class="logo">F</div>
+  <h1>FreeTurn Redirect</h1>
+  <p>Короткие страницы-переходники на <code>freeturn://</code>-ссылки.</p>
+  <div class="pill"><span class="dot"></span>Сервис работает</div>
+  <ul class="cmds">
+    <li><b>/new</b> — прислать ссылку</li>
+    <li><b>/list</b> — живые ссылки</li>
+    <li><b>/del &lt;code&gt;</b> — удалить</li>
+    <li><b>/delall</b> — удалить все</li>
+  </ul>
+  <p class="hint">Ссылки создаются через Telegram-бота и живут в памяти —
+  после перезапуска сервиса пропадают.</p>
+</div>
+<div class="footer"><a href="/health">/health</a></div>
+"""
+
+NOT_FOUND_BODY = """
+<div class="card">
+  <div class="logo" style="font-size:18px">404</div>
+  <h1>Ссылка не найдена</h1>
+  <p>Возможно, сервис перезагружался — ссылки живут только в памяти.
+  Создай её заново через Telegram-бота.</p>
+  <a class="btn" href="/">На главную</a>
+</div>
+"""
+
+LANDING_PAGE = page(
+    "FreeTurn Redirect", LANDING_BODY,
+    description="Короткие страницы-переходники на freeturn:// ссылки.",
+).encode("utf-8")
+NOT_FOUND_PAGE = page(
+    "Ссылка не найдена", NOT_FOUND_BODY,
+    description="Ссылка не найдена или сервис перезапускался.",
+).encode("utf-8")
 
 
 class Handler(BaseHTTPRequestHandler):
     def log_message(self, fmt, *args):  # keep logs short
         print(f"{self.address_string()} {fmt % args}", flush=True)
 
-    def _send(self, body, status=200, ctype="text/html; charset=utf-8"):
+    def _send(self, body, status=200, ctype="text/html; charset=utf-8",
+              cache="no-store"):
         data = body.encode("utf-8") if isinstance(body, str) else body
         self.send_response(status)
         self.send_header("Content-Type", ctype)
         self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", cache)
+        self.end_headers()
+        self.wfile.write(data)
+
+    def _send_font(self, filename):
+        data = FONT_CACHE.get(filename)
+        if data is None:
+            try:
+                with open(os.path.join(STATIC_DIR, filename), "rb") as f:
+                    data = f.read()
+            except OSError:
+                self._send(NOT_FOUND_PAGE, status=404)
+                return
+            FONT_CACHE[filename] = data
+        self.send_response(200)
+        self.send_header("Content-Type", "font/woff2")
+        self.send_header("Content-Length", str(len(data)))
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
         self.end_headers()
         self.wfile.write(data)
 
@@ -170,14 +334,17 @@ class Handler(BaseHTTPRequestHandler):
             self._send(json.dumps({"ok": True}), ctype="application/json")
             return
         if path == "/":
-            self._send(LANDING)
+            self._send(LANDING_PAGE)
+            return
+        if path in FONT_FILES:
+            self._send_font(FONT_FILES[path])
             return
         if path.startswith("/r/"):
             code = path[len("/r/"):].strip("/")
             with LOCK:
                 link = LINKS.get(code)
             if not link:
-                self._send(NOT_FOUND, status=404)
+                self._send(NOT_FOUND_PAGE, status=404)
                 return
             self._send(redirect_page(link))
             return
@@ -186,22 +353,37 @@ class Handler(BaseHTTPRequestHandler):
             raw = (q.get("link") or [""])[0]
             obj, err = validate_freeturn(raw)
             if err:
-                self._send(f"<h1>Bad link</h1><p>{html.escape(err)}</p>", status=400)
+                self._send(bad_link_page(err), status=400)
                 return
             self._send(redirect_page(raw.strip()))
             return
-        self._send(NOT_FOUND, status=404)
+        self._send(NOT_FOUND_PAGE, status=404)
 
     def do_POST(self):  # noqa: N802
-        self._send(NOT_FOUND, status=404)
+        self._send(NOT_FOUND_PAGE, status=404)
 
 
 def redirect_page(link):
     obj, _ = validate_freeturn(link)
-    name = html.escape(str((obj or {}).get("name") or (obj or {}).get("peer") or ""))
-    peer = html.escape(str((obj or {}).get("peer") or ""))
-    safe = html.escape(link, quote=True)
-    return REDIRECT_PAGE.format(name=name, peer=peer, link=safe)
+    name = str((obj or {}).get("name") or (obj or {}).get("peer") or "FreeTurn")
+    peer = str((obj or {}).get("peer") or "")
+    body = REDIRECT_BODY.substitute(
+        name=html.escape(name),
+        peer=html.escape(peer),
+        link=html.escape(link, quote=True),
+        link_js=json.dumps(link).replace("</", "<\\/"),
+    )
+    return page("Открыть в FreeTurn", body,
+                description="Открыть профиль в приложении FreeTurn.")
+
+
+def bad_link_page(err):
+    body = ('<div class="card"><div class="logo">!</div>'
+            '<h1>Ссылка не подходит</h1>'
+            f'<p>{html.escape(err)}</p>'
+            '<a class="btn" href="/">На главную</a></div>')
+    return page("Ссылка не подходит", body,
+                description="Ссылка не подходит для FreeTurn.")
 
 
 # ---------------------------------------------------------------- bot
@@ -317,6 +499,8 @@ def bot_loop():
 def main():
     load_links()
     threading.Thread(target=bot_loop, daemon=True).start()
+    ThreadingHTTPServer.daemon_threads = True
+    ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     print(f"listening on 0.0.0.0:{PORT}", flush=True)
     server.serve_forever()
