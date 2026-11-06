@@ -124,6 +124,8 @@ STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
 FONT_FILES = {
     "/static/inter-cyrillic.woff2": "inter-cyrillic.woff2",
     "/static/inter-latin.woff2": "inter-latin.woff2",
+    "/static/ibm-plex-mono-cyrillic.woff2": "ibm-plex-mono-cyrillic.woff2",
+    "/static/ibm-plex-mono-latin.woff2": "ibm-plex-mono-latin.woff2",
 }
 FONT_CACHE = {}  # filename -> bytes, read from disk once
 
@@ -253,16 +255,80 @@ REDIRECT_BODY = string.Template("""
 </script>
 """)
 
-LANDING_BODY = """
-<div class="card">
-  <h1>FreeTurn Redirect</h1>
-  <p>Короткие страницы-переходники на <code>freeturn://</code>-ссылки.</p>
-  <div class="pill"><span class="dot"></span>Сервис работает</div>
-  <p class="hint">Ссылки создаются через Telegram-бота и живут в памяти —
-  после перезапуска сервиса пропадают.</p>
-</div>
-<div class="footer"><a href="/health">/health</a></div>
+LANDING_CSS = """
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:700;
+font-display:swap;src:url(/static/ibm-plex-mono-cyrillic.woff2) format("woff2");
+unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:"IBM Plex Mono";font-style:normal;font-weight:700;
+font-display:swap;src:url(/static/ibm-plex-mono-latin.woff2) format("woff2");
+unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,
+U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,
+U+FEFF,U+FFFD}
+:root{--glow:#61b4ff}
+body[data-status="down"]{--glow:#ff7f00}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:#000;color:#fff;overflow:hidden;display:flex;
+align-items:center;justify-content:center;
+font-family:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+h1{position:relative;z-index:1;margin:0;padding:0 24px;text-align:center;
+font-size:clamp(24px,2.5vw,36px);font-weight:700;line-height:1.2;
+letter-spacing:0}
+.glow{position:absolute;left:50%;bottom:-47.8vh;width:104.8vw;height:62.6vh;
+border-radius:50%;background:var(--glow);filter:blur(15vw);opacity:.9;
+transform:translateX(-50%);will-change:opacity,transform;pointer-events:none;
+animation:glow-opacity 9s ease-in-out infinite,
+glow-scale 13s ease-in-out infinite}
+@keyframes glow-opacity{
+0%,100%{opacity:.82}18%{opacity:1}33%{opacity:.88}
+52%{opacity:.98}68%{opacity:.84}84%{opacity:.96}}
+@keyframes glow-scale{
+0%,100%{transform:translateX(-50%) scale(1)}
+25%{transform:translateX(-50%) scale(1.02)}
+50%{transform:translateX(-50%) scale(.99)}
+75%{transform:translateX(-50%) scale(1.015)}}
+@media (prefers-reduced-motion:reduce){.glow{animation:none;opacity:.9}}
 """
+
+LANDING_JS = """
+(function () {
+  var body = document.body;
+  function check() {
+    fetch('/health', { cache: 'no-store' }).then(function (r) {
+      if (!r.ok) throw new Error('bad status');
+      return r.json();
+    }).then(function (j) {
+      body.dataset.status = (j && j.ok) ? 'ok' : 'down';
+    }).catch(function () {
+      body.dataset.status = 'down';
+    });
+  }
+  check();
+  setInterval(check, 15000);
+})();
+"""
+
+
+def landing_page():
+    return f"""<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<meta name="description" content="FreeTurn Redirect">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="FreeTurn Redirect">
+<meta property="og:title" content="FreeTurn Redirect">
+<meta property="og:description" content="Страница-переходник на freeturn:// ссылки.">
+<link rel="icon" href="{FAVICON}">
+<title>FreeTurn Redirect</title>
+<style>{LANDING_CSS}</style></head>
+<body data-status="ok">
+<div class="glow" aria-hidden="true"></div>
+<h1>FreeTurn Redirect</h1>
+<script>{LANDING_JS}</script>
+</body></html>"""
+
 
 NOT_FOUND_BODY = """
 <div class="card">
@@ -274,10 +340,7 @@ NOT_FOUND_BODY = """
 </div>
 """
 
-LANDING_PAGE = page(
-    "FreeTurn Redirect", LANDING_BODY,
-    description="Короткие страницы-переходники на freeturn:// ссылки.",
-).encode("utf-8")
+LANDING_PAGE = landing_page().encode("utf-8")
 NOT_FOUND_PAGE = page(
     "Ссылка не найдена", NOT_FOUND_BODY,
     description="Ссылка не найдена или сервис перезапускался.",
