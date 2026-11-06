@@ -188,11 +188,6 @@ box-shadow:0 0 0 3px rgba(18,183,106,.18)}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
 font-size:.9em;background:var(--code-bg);border-radius:6px;padding:2px 6px;
 white-space:nowrap}
-ul.cmds{list-style:none;padding:0;margin:0;text-align:left;font-size:14px;
-color:var(--muted)}
-ul.cmds li{padding:8px 0;border-top:1px solid var(--border)}
-ul.cmds li:first-child{border-top:0}
-ul.cmds b{color:var(--fg);font-weight:600}
 .footer{margin-top:20px;font-size:13px;color:var(--muted);text-align:center}
 .footer a{color:var(--muted)}
 a{color:var(--accent)}
@@ -260,16 +255,9 @@ REDIRECT_BODY = string.Template("""
 
 LANDING_BODY = """
 <div class="card">
-  <div class="logo">F</div>
   <h1>FreeTurn Redirect</h1>
   <p>Короткие страницы-переходники на <code>freeturn://</code>-ссылки.</p>
   <div class="pill"><span class="dot"></span>Сервис работает</div>
-  <ul class="cmds">
-    <li><b>/new</b> — прислать ссылку</li>
-    <li><b>/list</b> — живые ссылки</li>
-    <li><b>/del &lt;code&gt;</b> — удалить</li>
-    <li><b>/delall</b> — удалить все</li>
-  </ul>
   <p class="hint">Ссылки создаются через Telegram-бота и живут в памяти —
   после перезапуска сервиса пропадают.</p>
 </div>
