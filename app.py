@@ -33,6 +33,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = int(os.environ.get("PORT", "8080"))
 BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+BOT_USERNAME = ""  # resolved from BOT_TOKEN via getMe at startup
 OWNER_TG_ID = os.environ.get("OWNER_TG_ID", "").strip()
 BASE_URL = os.environ.get("BASE_URL", "").rstrip("/")
 DATA_FILE = os.environ.get("DATA_FILE", "links.json")
@@ -126,6 +127,8 @@ FONT_FILES = {
     "/static/inter-latin.woff2": "inter-latin.woff2",
     "/static/ibm-plex-mono-cyrillic.woff2": "ibm-plex-mono-cyrillic.woff2",
     "/static/ibm-plex-mono-latin.woff2": "ibm-plex-mono-latin.woff2",
+    "/static/source-code-pro-cyrillic.woff2": "source-code-pro-cyrillic.woff2",
+    "/static/source-code-pro-latin.woff2": "source-code-pro-latin.woff2",
 }
 FONT_CACHE = {}  # filename -> bytes, read from disk once
 
@@ -264,6 +267,14 @@ font-display:swap;src:url(/static/ibm-plex-mono-latin.woff2) format("woff2");
 unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,
 U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,
 U+FEFF,U+FFFD}
+@font-face{font-family:"Source Code Pro";font-style:normal;font-weight:100 900;
+font-display:swap;src:url(/static/source-code-pro-cyrillic.woff2) format("woff2");
+unicode-range:U+0301,U+0400-045F,U+0490-0491,U+04B0-04B1,U+2116}
+@font-face{font-family:"Source Code Pro";font-style:normal;font-weight:100 900;
+font-display:swap;src:url(/static/source-code-pro-latin.woff2) format("woff2");
+unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,
+U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,
+U+FEFF,U+FFFD}
 :root{--glow:#61b4ff}
 body[data-status="down"]{--glow:#ff7f00}
 *{box-sizing:border-box}
@@ -275,7 +286,7 @@ h1{position:relative;z-index:1;margin:0;padding:0 24px;text-align:center;
 font-size:clamp(24px,2.5vw,36px);font-weight:700;line-height:1.2;
 letter-spacing:0}
 .glow{position:absolute;left:50%;bottom:-47.8vh;width:104.8vw;height:62.6vh;
-border-radius:50%;background:var(--glow);filter:blur(15vw);opacity:.9;
+border-radius:50%;background:var(--glow);filter:blur(15.36vw);opacity:.9;
 transform:translateX(-50%);will-change:opacity,transform;pointer-events:none;
 animation:glow-opacity 9s ease-in-out infinite,
 glow-scale 13s ease-in-out infinite}
@@ -288,6 +299,25 @@ glow-scale 13s ease-in-out infinite}
 50%{transform:translateX(-50%) scale(.99)}
 75%{transform:translateX(-50%) scale(1.015)}}
 @media (prefers-reduced-motion:reduce){.glow{animation:none;opacity:.9}}
+.menu{position:fixed;top:26px;left:30px;z-index:2;width:342px;background:#fff;
+border-radius:12px;overflow:hidden;color:#000;
+font-family:"Source Code Pro",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.menu-head{display:flex;flex-direction:column;gap:6px;padding:24px}
+.menu-head h2{margin:0;font-size:18px;font-weight:500;line-height:1.2;color:#000}
+.menu-head p{margin:0;font-size:14px;font-weight:400;line-height:1.2;color:#666}
+.menu-donut{display:flex;align-items:center;justify-content:center;height:198px;
+background:#dedede;overflow:hidden}
+.menu-donut pre{margin:0;font:7px/9px "Source Code Pro",ui-monospace,
+SFMono-Regular,Menlo,Consolas,monospace;color:#666;white-space:pre;
+letter-spacing:0;user-select:none}
+.menu-foot{display:flex;align-items:center;justify-content:center;gap:24px;
+padding:24px}
+.menu-foot a{display:inline-flex;align-items:center;gap:6px;font-size:14px;
+font-weight:400;line-height:1.2;color:#666;text-decoration:none}
+.menu-foot a:hover{color:#000}
+.menu-foot .dot{flex:none;width:16px;height:16px;border-radius:50%;
+background:#dedede}
+@media (max-width:1199px){.menu{display:none}}
 """
 
 LANDING_JS = """
@@ -306,10 +336,78 @@ LANDING_JS = """
   check();
   setInterval(check, 15000);
 })();
+(function () {
+  var pre = document.getElementById('donut');
+  if (!pre) return;
+  var COLS = 80, ROWS = 22, CHARS = '.,-~:;=!*#$@';
+  var zbuf = new Float32Array(COLS * ROWS);
+  var out = new Array(COLS * ROWS);
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var raf = 0, start = 0;
+  function render(t) {
+    var A = t * 0.0012, B = t * 0.0006;
+    var sinA = Math.sin(A), cosA = Math.cos(A);
+    var sinB = Math.sin(B), cosB = Math.cos(B);
+    for (var k = 0; k < zbuf.length; k++) { zbuf[k] = 0; out[k] = ' '; }
+    for (var j = 0; j < 6.283; j += 0.07) {
+      var sinJ = Math.sin(j), cosJ = Math.cos(j);
+      for (var i = 0; i < 6.283; i += 0.02) {
+        var sinI = Math.sin(i), cosI = Math.cos(i);
+        var h = cosJ + 2;
+        var D = 1 / (sinI * h * sinA + sinJ * cosA + 5);
+        var l = cosI, m = cosB, n = sinB;
+        var tt = sinI * h * cosA - sinJ * sinA;
+        var x = Math.floor(COLS / 2 + 30 * D * (l * h * m - tt * n));
+        var y = Math.floor(ROWS / 2 + 1 + 15 * D * (l * h * n + tt * m));
+        var o = x + COLS * y;
+        var N = Math.floor(8 * ((sinJ * sinA - sinI * cosJ * cosA) * m
+          - sinI * cosJ * sinA - sinJ * cosA - l * cosJ * n));
+        if (x >= 0 && x < COLS && y >= 0 && y < ROWS && D > zbuf[o]) {
+          zbuf[o] = D;
+          out[o] = CHARS[N > 0 ? (N < 11 ? N : 11) : 0];
+        }
+      }
+    }
+    var s = '';
+    for (var r = 0; r < ROWS; r++) {
+      s += out.slice(r * COLS, (r + 1) * COLS).join('') + '\\n';
+    }
+    pre.textContent = s;
+  }
+  function loop(now) {
+    if (pre.offsetParent !== null) {
+      if (!start) start = now;
+      render(now - start);
+    } else {
+      start = 0;
+    }
+    raf = requestAnimationFrame(loop);
+  }
+  if (reduce) {
+    render(0);
+  } else {
+    raf = requestAnimationFrame(loop);
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) {
+        cancelAnimationFrame(raf);
+        raf = 0;
+      } else if (!raf) {
+        start = 0;
+        raf = requestAnimationFrame(loop);
+      }
+    });
+  }
+})();
 """
 
 
 def landing_page():
+    if BOT_USERNAME:
+        bot_url = f"https://t.me/{html.escape(BOT_USERNAME, quote=True)}"
+        bot_attrs = ' target="_blank" rel="noopener"'
+    else:
+        bot_url = "#"
+        bot_attrs = ' aria-disabled="true"'
     return f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -325,6 +423,17 @@ def landing_page():
 <style>{LANDING_CSS}</style></head>
 <body data-status="ok">
 <div class="glow" aria-hidden="true"></div>
+<nav class="menu" aria-label="Quick links">
+  <div class="menu-head">
+    <h2>menu</h2>
+    <p>All quick links for the project are listed here</p>
+  </div>
+  <div class="menu-donut"><pre id="donut" aria-hidden="true"></pre></div>
+  <div class="menu-foot">
+    <a href="/health"><span class="dot"></span>/health</a>
+    <a href="{bot_url}"{bot_attrs}><span class="dot"></span>/bot</a>
+  </div>
+</nav>
 <h1>FreeTurn Redirect</h1>
 <script>{LANDING_JS}</script>
 </body></html>"""
@@ -438,7 +547,7 @@ def bad_link_page(err):
 
 
 # ---------------------------------------------------------------- bot
-def tg(method, payload):
+def tg(method, payload, timeout=35):
     if not BOT_TOKEN:
         raise RuntimeError("BOT_TOKEN is not set")
     req = urllib.request.Request(
@@ -446,8 +555,22 @@ def tg(method, payload):
         data=json.dumps(payload).encode(),
         headers={"Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(req, timeout=35) as r:
+    with urllib.request.urlopen(req, timeout=timeout) as r:
         return json.load(r)
+
+
+def resolve_bot_username():
+    """Ask Telegram who we are, so the landing page can link to t.me/<bot>."""
+    global BOT_USERNAME
+    if not BOT_TOKEN:
+        return
+    try:
+        me = tg("getMe", {}, timeout=5)
+        BOT_USERNAME = (me.get("result") or {}).get("username") or ""
+        if BOT_USERNAME:
+            print(f"bot username: @{BOT_USERNAME}", flush=True)
+    except Exception as e:  # noqa: BLE001 - best effort only
+        print(f"getMe failed: {e}", flush=True)
 
 
 def bot_send(chat_id, text):
@@ -548,7 +671,10 @@ def bot_loop():
 
 
 def main():
+    global LANDING_PAGE
     load_links()
+    resolve_bot_username()
+    LANDING_PAGE = landing_page().encode("utf-8")
     threading.Thread(target=bot_loop, daemon=True).start()
     ThreadingHTTPServer.daemon_threads = True
     ThreadingHTTPServer.allow_reuse_address = True
