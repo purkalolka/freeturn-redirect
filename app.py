@@ -131,6 +131,8 @@ FONT_FILES = {
     "/static/source-code-pro-latin.woff2": "source-code-pro-latin.woff2",
 }
 FONT_CACHE = {}  # filename -> bytes, read from disk once
+OG_IMAGE_FILE = os.path.join(STATIC_DIR, "og.png")
+OG_IMAGE_CACHE = None  # bytes, read from disk once
 
 FAVICON = ("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' "
            "viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' "
@@ -401,13 +403,18 @@ LANDING_JS = """
 """
 
 
-def landing_page():
+def landing_page(base_url=""):
     if BOT_USERNAME:
         bot_url = f"https://t.me/{html.escape(BOT_USERNAME, quote=True)}"
         bot_attrs = ' target="_blank" rel="noopener"'
     else:
         bot_url = "#"
         bot_attrs = ' aria-disabled="true"'
+    base = base_url.rstrip("/")
+    og_image = f"{base}/static/og.png" if base else "/static/og.png"
+    og_url = f"{base}/" if base else ""
+    og_url_tag = (f'<meta property="og:url" content="{html.escape(og_url, quote=True)}">\n'
+                  if og_url else "")
     return f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -418,6 +425,15 @@ def landing_page():
 <meta property="og:site_name" content="FreeTurn Redirect">
 <meta property="og:title" content="FreeTurn Redirect">
 <meta property="og:description" content="Страница-переходник на freeturn:// ссылки.">
+{og_url_tag}<meta property="og:image" content="{html.escape(og_image, quote=True)}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="FreeTurn Redirect — ASCII donut">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="FreeTurn Redirect">
+<meta name="twitter:description" content="Страница-переходник на freeturn:// ссылки.">
+<meta name="twitter:image" content="{html.escape(og_image, quote=True)}">
 <link rel="icon" href="{FAVICON}">
 <title>FreeTurn Redirect</title>
 <style>{LANDING_CSS}</style></head>
@@ -449,7 +465,6 @@ NOT_FOUND_BODY = """
 </div>
 """
 
-LANDING_PAGE = landing_page().encode("utf-8")
 NOT_FOUND_PAGE = page(
     "Ссылка не найдена", NOT_FOUND_BODY,
     description="Ссылка не найдена или сервис перезапускался.",
@@ -469,6 +484,22 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Cache-Control", cache)
         self.end_headers()
         self.wfile.write(data)
+
+    def _send_og(self):
+        global OG_IMAGE_CACHE
+        if OG_IMAGE_CACHE is None:
+            try:
+                with open(OG_IMAGE_FILE, "rb") as f:
+                    OG_IMAGE_CACHE = f.read()
+            except OSError:
+                self._send(NOT_FOUND_PAGE, status=404)
+                return
+        self.send_response(200)
+        self.send_header("Content-Type", "image/png")
+        self.send_header("Content-Length", str(len(OG_IMAGE_CACHE)))
+        self.send_header("Cache-Control", "public, max-age=31536000, immutable")
+        self.end_headers()
+        self.wfile.write(OG_IMAGE_CACHE)
 
     def _send_font(self, filename):
         data = FONT_CACHE.get(filename)
@@ -494,7 +525,10 @@ class Handler(BaseHTTPRequestHandler):
             self._send(json.dumps({"ok": True}), ctype="application/json")
             return
         if path == "/":
-            self._send(LANDING_PAGE)
+            self._send(landing_page(public_base(self)))
+            return
+        if path == "/static/og.png":
+            self._send_og()
             return
         if path in FONT_FILES:
             self._send_font(FONT_FILES[path])
@@ -671,10 +705,8 @@ def bot_loop():
 
 
 def main():
-    global LANDING_PAGE
     load_links()
     resolve_bot_username()
-    LANDING_PAGE = landing_page().encode("utf-8")
     threading.Thread(target=bot_loop, daemon=True).start()
     ThreadingHTTPServer.daemon_threads = True
     ThreadingHTTPServer.allow_reuse_address = True
