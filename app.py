@@ -204,6 +204,8 @@ a{color:var(--accent)}
 def page(title, body, *, description="", og_title="FreeTurn Redirect",
          og_description="Страница-переходник на freeturn:// ссылки."):
     """Build a full HTML page with the shared head, CSS and neutral OG tags."""
+    og_image = f"{BASE_URL}/static/og.png" if BASE_URL else "/static/og.png"
+    og_image = html.escape(og_image, quote=True)
     return f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -215,6 +217,17 @@ def page(title, body, *, description="", og_title="FreeTurn Redirect",
 <meta property="og:site_name" content="FreeTurn Redirect">
 <meta property="og:title" content="{html.escape(og_title, quote=True)}">
 <meta property="og:description" content="{html.escape(og_description, quote=True)}">
+<meta property="og:image" content="{og_image}">
+<meta property="og:image:secure_url" content="{og_image}">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="FreeTurn Redirect — ASCII donut">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="{html.escape(og_title, quote=True)}">
+<meta name="twitter:description" content="{html.escape(og_description, quote=True)}">
+<meta name="twitter:image" content="{og_image}">
+<meta name="twitter:image:alt" content="FreeTurn Redirect — ASCII donut">
 <link rel="icon" href="{FAVICON}">
 <title>{html.escape(title)}</title>
 <style>{BASE_CSS}</style></head>
@@ -426,6 +439,7 @@ def landing_page(base_url=""):
 <meta property="og:title" content="FreeTurn Redirect">
 <meta property="og:description" content="Страница-переходник на freeturn:// ссылки.">
 {og_url_tag}<meta property="og:image" content="{html.escape(og_image, quote=True)}">
+<meta property="og:image:secure_url" content="{html.escape(og_image, quote=True)}">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -434,6 +448,7 @@ def landing_page(base_url=""):
 <meta name="twitter:title" content="FreeTurn Redirect">
 <meta name="twitter:description" content="Страница-переходник на freeturn:// ссылки.">
 <meta name="twitter:image" content="{html.escape(og_image, quote=True)}">
+<meta name="twitter:image:alt" content="FreeTurn Redirect — ASCII donut">
 <link rel="icon" href="{FAVICON}">
 <title>FreeTurn Redirect</title>
 <style>{LANDING_CSS}</style></head>
@@ -483,7 +498,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", cache)
         self.end_headers()
-        self.wfile.write(data)
+        if not getattr(self, "_head_only", False):
+            self.wfile.write(data)
 
     def _send_og(self):
         global OG_IMAGE_CACHE
@@ -499,7 +515,8 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(OG_IMAGE_CACHE)))
         self.send_header("Cache-Control", "public, max-age=31536000, immutable")
         self.end_headers()
-        self.wfile.write(OG_IMAGE_CACHE)
+        if not getattr(self, "_head_only", False):
+            self.wfile.write(OG_IMAGE_CACHE)
 
     def _send_font(self, filename):
         data = FONT_CACHE.get(filename)
@@ -516,7 +533,12 @@ class Handler(BaseHTTPRequestHandler):
         self.send_header("Content-Length", str(len(data)))
         self.send_header("Cache-Control", "public, max-age=31536000, immutable")
         self.end_headers()
-        self.wfile.write(data)
+        if not getattr(self, "_head_only", False):
+            self.wfile.write(data)
+
+    def do_HEAD(self):  # noqa: N802
+        self._head_only = True
+        self.do_GET()
 
     def do_GET(self):  # noqa: N802
         parsed = urllib.parse.urlparse(self.path)

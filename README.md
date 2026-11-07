@@ -39,11 +39,12 @@ Source Code Pro на главной, Inter на остальных страни�
 карточек включается автоматически по `prefers-color-scheme`. OG-теги
 нейтральные — имя профиля в превью ссылки не попадает.
 
-Превью главной для Telegram и соцсетей — `static/og.png` (1200×630):
+Превью для Telegram и соцсетей — `static/og.png` (1200×630):
 ASCII-донат `#666` на синем `#61b4ff`, без текста. Отдаётся по
-`/static/og.png` с долгим кэшем, в лендинге прописаны `og:image` и
-`twitter:image` с абсолютным URL. Перегенерировать:
-`python tools/make_og.py` (нужен Pillow и `tools/SourceCodePro.ttf`).
+`/static/og.png` с долгим кэшем; `og:image`/`twitter:image` с абсолютным
+URL прописаны и на главной, и на `/r/<code>`, `/go`, 404. Сервер отвечает
+на `HEAD` (нужно краулерам). Перегенерировать: `python tools/make_og.py`
+(нужен Pillow и `tools/SourceCodePro.ttf`).
 
 ## Команды бота
 
