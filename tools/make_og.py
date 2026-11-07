@@ -17,7 +17,7 @@ from PIL import Image, ImageDraw, ImageFont
 COLS, ROWS = 80, 22
 CHARS = ".,-~:;=!*#$@"
 BG = "#61b4ff"
-FG = "#666666"
+FG = "#333333"
 W, H = 1200, 630
 FONT_SIZE = 22
 LINE_H = 26
